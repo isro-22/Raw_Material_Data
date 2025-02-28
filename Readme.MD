@@ -29,6 +29,11 @@ We welcome contributions to the Raw Material Data project. If you have suggestio
 * Commit your changes and push them to your fork.
 * Submit a pull request with a detailed description of your changes.
 
+## Reference
+
+The data source used for this project is currently from :
+www.thegoodscentscompany.com
+
 ## Contact
 For questions or further information, please contact the project maintainers at 
 moehammad.isro@gmail.com
