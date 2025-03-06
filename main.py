@@ -7,13 +7,15 @@
 
 ## Version 2.0 (06 March 2025)
 # Added solubility data scrap
-
-
+# Processing 20 links per batch
+# Saving temporary results in files named scraped_data-{i}.csv
+# Merging all scraped_data-{i}.csv files into a single file scraped_data_final.csv
 
 import requests
 from bs4 import BeautifulSoup
 import csv
 import re
+import os
 
 
 class GoodScentsScraper:
@@ -28,8 +30,10 @@ class GoodScentsScraper:
             return None
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        name = soup.find('span', itemprop='name').get_text(strip=True) if soup.find('span', itemprop='name') else "Tidak ditemukan"
-        head_synonym = soup.find('span', class_='headsynonym').get_text(strip=True) if soup.find('span', class_='headsynonym') else "Tidak ditemukan"
+        name = soup.find('span', itemprop='name').get_text(strip=True) if soup.find('span',
+                                                                                    itemprop='name') else "Tidak ditemukan"
+        head_synonym = soup.find('span', class_='headsynonym').get_text(strip=True) if soup.find('span',
+                                                                                                 class_='headsynonym') else "Tidak ditemukan"
 
         compound_name = cas_number = molecular_weight = formula = "Tidak ditemukan"
         table = soup.find('table', class_='cheminfo')
@@ -71,7 +75,6 @@ class GoodScentsScraper:
 
         odor_type, odor_strength = self.scrape_organoleptic(soup)
 
-        # Ekstrak informasi kelarutan
         solubility_scraper = SolubilityScraper()
         soluble_in = solubility_scraper.extract_data(soup, "Soluble in")
         insoluble_in = solubility_scraper.extract_data(soup, "Insoluble in")
@@ -134,27 +137,23 @@ class OdorScraper:
 class SolubilityScraper:
     @staticmethod
     def extract_data(soup, section_text):
-        """
-        Fungsi ini mencari bagian 'Soluble in:' atau 'Insoluble in:' dan mengembalikan daftar bahan yang sesuai.
-        """
         items = []
         section = soup.find("td", class_="synonyms", string=re.compile(section_text, re.I))
 
         if section:
-            tr = section.find_parent("tr")  # Ambil elemen <tr> dari bagian ini
+            tr = section.find_parent("tr")
             for sibling in tr.find_next_siblings("tr"):
-                td = sibling.find("td", class_=re.compile("wrd"))  # Cari elemen dengan class 'wrd'
+                td = sibling.find("td", class_=re.compile("wrd"))
                 if td:
                     items.append(td.text.strip())
                 else:
-                    break  # Berhenti jika tidak ada data lagi
+                    break
 
         return "; ".join(items) if items else "Tidak ditemukan"
 
 
 if __name__ == "__main__":
-    input_file = "/input/list.txt"
-    output_file = "/output/scraped_data.csv"
+    input_file = "/Input/list.txt"
 
     try:
         with open(input_file, "r", encoding="utf-8") as file:
@@ -163,22 +162,47 @@ if __name__ == "__main__":
         print(f"Error membaca file teks: {e}")
         exit()
 
-    scraper = GoodScentsScraper(urls)
-    scraper.scrape()
+    batch_size = 20
+    num_batches = (len(urls) + batch_size - 1) // batch_size  # Hitung jumlah batch
 
-    odor_scraper = OdorScraper(urls)
-    odor_scraper.scrape()
+    for i in range(num_batches):
+        batch_urls = urls[i * batch_size: (i + 1) * batch_size]
+        output_file = f"scraped_data-{i + 1}.csv"
 
-    with open(output_file, "w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.writer(csvfile)
+        scraper = GoodScentsScraper(batch_urls)
+        scraper.scrape()
+
+        odor_scraper = OdorScraper(batch_urls)
+        odor_scraper.scrape()
+
+        with open(output_file, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(
+                ["URL", "Name", "Head Synonym", "Compound Name", "CAS Number", "Molecular Weight", "Formula",
+                 "Appearance",
+                 "Assay", "Specific Gravity", "Refractive Index", "Melting Point", "Boiling Point", "Flash Point",
+                 "Odor Type", "Odor Strength", "Threshold", "Description", "Source", "Soluble In", "Insoluble In"])
+
+            for data in scraper.data:
+                url = data[0]
+                odor_data = odor_scraper.data.get(url, ["Tidak ditemukan"] * 3)
+                writer.writerow(data[:16] + odor_data + data[16:])
+
+        print(f"Batch {i + 1} selesai, data disimpan dalam {output_file}")
+
+    print("Semua batch selesai. Sekarang menggabungkan semua file CSV...")
+    with open("scraped_data_final.csv", "w", newline="", encoding="utf-8") as final_csv:
+        writer = csv.writer(final_csv)
         writer.writerow(
             ["URL", "Name", "Head Synonym", "Compound Name", "CAS Number", "Molecular Weight", "Formula", "Appearance",
              "Assay", "Specific Gravity", "Refractive Index", "Melting Point", "Boiling Point", "Flash Point",
              "Odor Type", "Odor Strength", "Threshold", "Description", "Source", "Soluble In", "Insoluble In"])
 
-        for data in scraper.data:
-            url = data[0]
-            odor_data = odor_scraper.data.get(url, ["Tidak ditemukan"] * 3)
-            writer.writerow(data[:16] + odor_data + data[16:])  # Menyusun ulang urutan output sesuai permintaan
+        for i in range(num_batches):
+            with open(f"scraped_data-{i + 1}.csv", "r", encoding="utf-8") as batch_csv:
+                next(batch_csv)
+                for line in batch_csv:
+                    final_csv.write(line)
 
-    print(f"Data telah disimpan dalam {output_file}")
+    print("Semua data telah digabung dalam scraped_data_final.csv ✅")
+
