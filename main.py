@@ -1,12 +1,19 @@
-## Version 1.0
+## Version 0.0 (01 March 2025)
+# Scrap data from thegoodscents without class
+
+## Version 1.0 (03 March 2025)
 # Converting Old code to make class mode
 # Including Odor Descriptor and Odor Type
+
+## Version 2.0 (06 March 2025)
+# Added solubility data scrap
 
 
 
 import requests
 from bs4 import BeautifulSoup
 import csv
+import re
 
 
 class GoodScentsScraper:
@@ -21,10 +28,8 @@ class GoodScentsScraper:
             return None
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        name = soup.find('span', itemprop='name').get_text(strip=True) if soup.find('span',
-                                                                                    itemprop='name') else "Tidak ditemukan"
-        head_synonym = soup.find('span', class_='headsynonym').get_text(strip=True) if soup.find('span',
-                                                                                                 class_='headsynonym') else "Tidak ditemukan"
+        name = soup.find('span', itemprop='name').get_text(strip=True) if soup.find('span', itemprop='name') else "Tidak ditemukan"
+        head_synonym = soup.find('span', class_='headsynonym').get_text(strip=True) if soup.find('span', class_='headsynonym') else "Tidak ditemukan"
 
         compound_name = cas_number = molecular_weight = formula = "Tidak ditemukan"
         table = soup.find('table', class_='cheminfo')
@@ -66,9 +71,15 @@ class GoodScentsScraper:
 
         odor_type, odor_strength = self.scrape_organoleptic(soup)
 
+        # Ekstrak informasi kelarutan
+        solubility_scraper = SolubilityScraper()
+        soluble_in = solubility_scraper.extract_data(soup, "Soluble in")
+        insoluble_in = solubility_scraper.extract_data(soup, "Insoluble in")
+
         print(f"{url} telah berhasil di-scrap.")
         return [url, name, head_synonym, compound_name, cas_number, molecular_weight, formula, appearance, assay,
-                specific_gravity, refractive_index, melting_point, boiling_point, flash_point, odor_type, odor_strength]
+                specific_gravity, refractive_index, melting_point, boiling_point, flash_point, odor_type, odor_strength,
+                soluble_in, insoluble_in]
 
     def scrape_organoleptic(self, soup):
         odor_type = odor_strength = "Tidak ditemukan"
@@ -120,9 +131,30 @@ class OdorScraper:
                 print(f"Error scraping {url}: {e}")
 
 
+class SolubilityScraper:
+    @staticmethod
+    def extract_data(soup, section_text):
+        """
+        Fungsi ini mencari bagian 'Soluble in:' atau 'Insoluble in:' dan mengembalikan daftar bahan yang sesuai.
+        """
+        items = []
+        section = soup.find("td", class_="synonyms", string=re.compile(section_text, re.I))
+
+        if section:
+            tr = section.find_parent("tr")  # Ambil elemen <tr> dari bagian ini
+            for sibling in tr.find_next_siblings("tr"):
+                td = sibling.find("td", class_=re.compile("wrd"))  # Cari elemen dengan class 'wrd'
+                if td:
+                    items.append(td.text.strip())
+                else:
+                    break  # Berhenti jika tidak ada data lagi
+
+        return "; ".join(items) if items else "Tidak ditemukan"
+
+
 if __name__ == "__main__":
-    input_file = "link.txt"
-    output_file = "scraped_data.csv"
+    input_file = "/input/list.txt"
+    output_file = "/output/scraped_data.csv"
 
     try:
         with open(input_file, "r", encoding="utf-8") as file:
@@ -142,11 +174,11 @@ if __name__ == "__main__":
         writer.writerow(
             ["URL", "Name", "Head Synonym", "Compound Name", "CAS Number", "Molecular Weight", "Formula", "Appearance",
              "Assay", "Specific Gravity", "Refractive Index", "Melting Point", "Boiling Point", "Flash Point",
-             "Odor Type", "Odor Strength", "Threshold", "Description", "Source"])
+             "Odor Type", "Odor Strength", "Threshold", "Description", "Source", "Soluble In", "Insoluble In"])
 
         for data in scraper.data:
             url = data[0]
             odor_data = odor_scraper.data.get(url, ["Tidak ditemukan"] * 3)
-            writer.writerow(data + odor_data)
+            writer.writerow(data[:16] + odor_data + data[16:])  # Menyusun ulang urutan output sesuai permintaan
 
     print(f"Data telah disimpan dalam {output_file}")

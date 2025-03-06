@@ -25,6 +25,11 @@ To set up the project on your local machine, follow these steps:
 
    ```bash
    python3 main.py
+   
+## 📌 Requirements
+* requests 2.32.3
+* beautifulsoup4 4.13.3
+
 
 ## Contributing
 We welcome contributions to the Raw Material Data project. If you have suggestions or improvements, please follow these steps:
