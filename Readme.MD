@@ -20,8 +20,11 @@ To set up the project on your local machine, follow these steps:
 
    ```bash
    cd raw-material-data
-   
-3. Run a program:
+
+3. Insert all the links to be scrapped in the input/list.txt folder
+
+
+4. Run a program:
 
    ```bash
    python3 main.py
